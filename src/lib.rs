@@ -1,37 +1,23 @@
-use std::collections::hash_map;
+use std::{
+    cell::{Ref, RefCell},
+    collections::hash_map,
+    rc::Rc,
+};
 
+pub use env::Env;
 use error::MalError;
-use types::{MalData, MalEnvironment};
+use types::{MalData, MalNativeFunction};
 
-mod error;
+mod env;
+pub mod error;
 mod reader;
 mod types;
 
-pub struct Interpreter {
-    env: MalEnvironment,
-}
-
-impl Default for Interpreter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Interpreter {
-    pub fn new() -> Self {
-        let mut interpreter = Self {
-            env: MalEnvironment::new(),
-        };
-
-        interpreter.load_builtins();
-
-        interpreter
-    }
-
-    fn load_builtins(&mut self) {
-        self.env.insert(
-            "+".to_owned(),
-            Box::new(|args: &[MalData]| {
+pub fn load_builtins(env: &mut Env) {
+    env.set(
+        "+".to_owned(),
+        MalData::MalNativeFunction(MalNativeFunction(Rc::new(Box::new(
+            |args: &[MalData]| {
                 if let MalData::Integer(arg0) = &args[0] {
                     if let MalData::Integer(arg1) = &args[1] {
                         Ok(MalData::Integer(arg0 + arg1))
@@ -41,12 +27,14 @@ impl Interpreter {
                 } else {
                     Err(MalError::TypeError(args[0].clone()))
                 }
-            }),
-        );
+            },
+        )))),
+    );
 
-        self.env.insert(
-            "-".to_owned(),
-            Box::new(|args: &[MalData]| {
+    env.set(
+        "-".to_owned(),
+        MalData::MalNativeFunction(MalNativeFunction(Rc::new(Box::new(
+            |args: &[MalData]| {
                 if let MalData::Integer(arg0) = &args[0] {
                     if let MalData::Integer(arg1) = &args[1] {
                         Ok(MalData::Integer(arg0 - arg1))
@@ -56,12 +44,14 @@ impl Interpreter {
                 } else {
                     Err(MalError::TypeError(args[0].clone()))
                 }
-            }),
-        );
+            },
+        )))),
+    );
 
-        self.env.insert(
-            "*".to_owned(),
-            Box::new(|args: &[MalData]| {
+    env.set(
+        "*".to_owned(),
+        MalData::MalNativeFunction(MalNativeFunction(Rc::new(Box::new(
+            |args: &[MalData]| {
                 if let MalData::Integer(arg0) = &args[0] {
                     if let MalData::Integer(arg1) = &args[1] {
                         Ok(MalData::Integer(arg0 * arg1))
@@ -71,12 +61,14 @@ impl Interpreter {
                 } else {
                     Err(MalError::TypeError(args[0].clone()))
                 }
-            }),
-        );
+            },
+        )))),
+    );
 
-        self.env.insert(
-            "/".to_owned(),
-            Box::new(|args: &[MalData]| {
+    env.set(
+        "/".to_owned(),
+        MalData::MalNativeFunction(MalNativeFunction(Rc::new(Box::new(
+            |args: &[MalData]| {
                 if let MalData::Integer(arg0) = &args[0] {
                     if let MalData::Integer(arg1) = &args[1] {
                         Ok(MalData::Integer(arg0 / arg1))
@@ -86,74 +78,130 @@ impl Interpreter {
                 } else {
                     Err(MalError::TypeError(args[0].clone()))
                 }
-            }),
-        );
-    }
+            },
+        )))),
+    );
+}
 
-    pub fn read(&self, input: String) -> Result<MalData, MalError> {
-        let mut reader = reader::Reader::new(input);
-        reader.read_input()
-    }
+pub fn read(input: String) -> Result<MalData, MalError> {
+    let mut reader = reader::Reader::new(input);
+    reader.read_input()
+}
 
-    pub fn eval(&self, input: MalData) -> Result<MalData, MalError> {
-        if self.env.contains_key("DEBUG-EVAL") {
-            println!("EVAL: {}", input);
+pub fn eval(input: MalData, env: Rc<RefCell<Env>>) -> Result<MalData, MalError> {
+    if let Some(debug_eval) = env.borrow().get("DEBUG-EVAL") {
+        match debug_eval {
+            MalData::Nil | MalData::False => {}
+            _ => println!("EVAL: {}", input),
         }
-        use MalData::*;
-        match &input {
-            Symbol(s) => {
-                if !self.env.contains_key(s) {
-                    Err(MalError::SymbolNotFound(s.clone()))
-                } else {
-                    Ok(input)
-                }
+    }
+    use MalData::*;
+    match &input {
+        Symbol(s) => {
+            if let Some(value) = env.borrow().get(s) {
+                Ok(value.clone())
+            } else {
+                Err(MalError::SymbolNotFound(s.clone()))
             }
-            List(list) => {
-                let evaluated_list = list
-                    .iter()
-                    .map(|el| self.eval(el.clone()))
-                    .collect::<Result<Vec<_>, _>>()?;
-                if !evaluated_list.is_empty() {
-                    if let MalData::Symbol(s) = &evaluated_list[0] {
-                        let native_function = self.env.get(s).unwrap();
-                        Ok(native_function(&evaluated_list[1..])?)
-                    } else {
-                        Err(MalError::TypeError(evaluated_list[0].clone()))
+        }
+        List(list) => {
+            if !list.is_empty() {
+                if let MalData::Symbol(s) = &list[0] {
+                    match s.as_str() {
+                        "def!" => {
+                            // Check if the list is the right length
+                            if list.len() != 3 {
+                                return Err(MalError::TypeError(input.clone()));
+                            }
+                            // Get the key and value
+                            if let MalData::Symbol(key) = &list[1] {
+                                let value = eval(list[2].clone(), env.clone())?;
+                                env.borrow_mut().set(key.clone(), value.clone());
+                                return Ok(value);
+                            } else {
+                                // Error
+                                return Err(MalError::TypeError(list[1].clone()));
+                            }
+                        }
+                        "let*" => {
+                            // Check if the list has an even number of elements
+                            if list.len() != 3 {
+                                return Err(MalError::TypeError(input.clone()));
+                            }
+                            // Evaluate the bindings list
+                            if let MalData::List(bindings) | MalData::Vector(bindings) = &list[1] {
+                                let pairs = bindings.chunks_exact(2);
+                                if pairs.remainder().len() != 0 {
+                                    return Err(MalError::TypeError(list[1].clone()));
+                                }
+                                let new_env = Env::new(Some(env.clone()));
+                                // Load up the new environment with new bindings
+                                for pair in pairs {
+                                    let key = if let MalData::Symbol(key) = &pair[0] {
+                                        key.clone()
+                                    } else {
+                                        return Err(MalError::TypeError(pair[0].clone()));
+                                    };
+                                    let value = eval(pair[1].clone(), new_env.clone())?;
+                                    new_env.borrow_mut().set(key, value);
+                                }
+                                // Evaluate the body
+                                return eval(list[2].clone(), new_env);
+                            } else {
+                                // Error
+                                return Err(MalError::TypeError(list[1].clone()));
+                            }
+                        }
+                        _ => {}
                     }
-                } else {
-                    Ok(MalData::List(evaluated_list))
                 }
             }
-            Vector(vector) => Ok(MalData::Vector(
-                vector
-                    .iter()
-                    .map(|el| self.eval(el.clone()))
-                    .collect::<Result<Vec<_>, _>>()?,
-            )),
-            HashMap(hash_map) => {
-                // Evaluate the hashmap
-                let evaluated_hash_map: Result<
-                    hash_map::HashMap<types::MalHashMapKey, MalData>,
-                    MalError,
-                > = hash_map
-                    .iter()
-                    .map(|(key, value)| self.eval(value.clone()).map(|value| (key.clone(), value)))
-                    .collect();
-                Ok(MalData::HashMap(evaluated_hash_map?))
+
+            // "Apply phase"
+            let evaluated_list = list
+                .iter()
+                .map(|el| eval(el.clone(), env.clone()))
+                .collect::<Result<Vec<_>, _>>()?;
+            if !evaluated_list.is_empty() {
+                if let MalData::MalNativeFunction(f) = &evaluated_list[0] {
+                    // Apply the function
+                    Ok(f.0.as_ref()(&evaluated_list[1..])?)
+                } else {
+                    Err(MalError::TypeError(evaluated_list[0].clone()))
+                }
+            } else {
+                Ok(MalData::List(evaluated_list))
             }
-            _ => Ok(input),
         }
-    }
-
-    pub fn print(&self, input: MalData) -> String {
-        format!("{}", input)
-    }
-
-    pub fn rep(&self, input: String) -> String {
-        let evaluated = self.read(input).and_then(|ast| self.eval(ast));
-        match evaluated {
-            Ok(evaluated) => self.print(evaluated),
-            Err(e) => format!("{}", e),
+        Vector(vector) => Ok(MalData::Vector(
+            vector
+                .iter()
+                .map(|el| eval(el.clone(), env.clone()))
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
+        HashMap(hash_map) => {
+            // Evaluate the hashmap
+            let evaluated_hash_map: Result<
+                hash_map::HashMap<types::MalHashMapKey, MalData>,
+                MalError,
+            > = hash_map
+                .iter()
+                .map(|(key, value)| {
+                    eval(value.clone(), env.clone()).map(|value| (key.clone(), value))
+                })
+                .collect();
+            Ok(MalData::HashMap(evaluated_hash_map?))
         }
+        _ => Ok(input),
     }
+}
+
+pub fn print(input: MalData) -> String {
+    format!("{}", input)
+}
+
+pub fn rep(input: String, env: Rc<RefCell<Env>>) -> Result<String, MalError> {
+    read(input)
+        .and_then(|ast| eval(ast, env))
+        .and_then(|evaluated| Ok(print(evaluated)))
 }

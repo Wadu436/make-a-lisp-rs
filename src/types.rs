@@ -1,9 +1,25 @@
 use std::{
-    collections::{hash_map, HashMap},
-    fmt::Display,
+    collections::hash_map,
+    fmt::{Debug, Display},
+    rc::Rc,
 };
 
 use crate::error::MalError;
+
+#[derive(Clone)]
+pub struct MalNativeFunction(pub Rc<Box<dyn Fn(&[MalData]) -> Result<MalData, MalError>>>);
+
+impl Debug for MalNativeFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<fn>")
+    }
+}
+
+impl From<Box<dyn Fn(&[MalData]) -> Result<MalData, MalError>>> for MalData {
+    fn from(value: Box<dyn Fn(&[MalData]) -> Result<MalData, MalError>>) -> Self {
+        MalData::MalNativeFunction(MalNativeFunction(Rc::new(value)))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum MalData {
@@ -17,6 +33,7 @@ pub enum MalData {
     False,
     String(String),
     Keyword(String),
+    MalNativeFunction(MalNativeFunction),
 }
 
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
@@ -100,9 +117,9 @@ impl Display for MalData {
             MalData::False => write!(f, "false"),
             MalData::String(string) => write!(f, "\"{}\"", escape_mal_string(string)),
             MalData::Keyword(keyword) => write!(f, ":{}", keyword),
+            MalData::MalNativeFunction(_) => {
+                write!(f, "<fn>")
+            }
         }
     }
 }
-
-pub type MalNativeFunction = Box<dyn Fn(&[MalData]) -> Result<MalData, MalError>>;
-pub type MalEnvironment = HashMap<String, MalNativeFunction>;

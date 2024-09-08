@@ -1,4 +1,6 @@
-use std::{env, fmt::Display, panic};
+use std::{cell::RefCell, env, fmt::Display, ops::DerefMut, panic, rc::Rc};
+
+use make_a_lisp_rs::{error::MalError, rep, Env};
 
 #[derive(Debug)]
 struct Section {
@@ -23,7 +25,7 @@ impl Display for ExpectedOutput {
 
 #[derive(Debug, Clone)]
 struct Case {
-    input: String,
+    input: Vec<String>,
     expected_output: ExpectedOutput,
     line_number: usize,
 
@@ -40,7 +42,7 @@ struct CaseRunConfig {
 }
 
 impl Case {
-    fn run(&self, config: CaseRunConfig) -> CaseOutput {
+    fn run(&self, config: CaseRunConfig, env: Rc<RefCell<Env>>) -> CaseOutput {
         if config.skip_deferrable && self.deferrable {
             return CaseOutput::Skip;
         }
@@ -51,22 +53,28 @@ impl Case {
             return CaseOutput::Skip;
         }
 
-        let mut panic = false;
-        let result = panic::catch_unwind(|| {
-            let interpreter = make_a_lisp_rs::Interpreter::new();
-            interpreter.rep(self.input.clone())
-        });
+        let result: Result<String, MalError> = (|| {
+            let mut output = String::new();
+            for line in self.input.iter() {
+                output = match rep(line.clone(), env.clone()) {
+                    Ok(output) => output,
+                    Err(e) => {
+                        format!("{}", e)
+                    }
+                };
+            }
+            Ok(output)
+        })();
 
-        let (passed, actual_output) = match result {
-            Ok(result) => match self.expected_output.clone() {
-                ExpectedOutput::Literal(expected_output) => (result == expected_output, result),
-                ExpectedOutput::Regex(expected_output) => {
-                    (expected_output.is_match(result.as_bytes()).unwrap(), result)
-                }
-            },
-            Err(_) => {
-                panic = true;
-                (false, "panicked".to_owned())
+        let actual_output = match result {
+            Ok(output) => output,
+            Err(e) => format!("{}", e),
+        };
+
+        let passed = match self.expected_output.clone() {
+            ExpectedOutput::Literal(expected_output) => actual_output == expected_output,
+            ExpectedOutput::Regex(expected_output) => {
+                expected_output.is_match(actual_output.as_bytes()).unwrap()
             }
         };
         if passed {
@@ -80,7 +88,6 @@ impl Case {
                 soft: self.soft,
                 optional: self.optional,
                 deferrable: self.deferrable,
-                panic,
             })
         }
     }
@@ -92,14 +99,13 @@ struct SectionOutput {
 }
 
 struct FailingCase {
-    input: String,
+    input: Vec<String>,
     expected_output: ExpectedOutput,
     actual_output: String,
     line_number: usize,
     soft: bool,
     optional: bool,
     deferrable: bool,
-    panic: bool,
 }
 
 enum CaseOutput {
@@ -134,7 +140,10 @@ fn main() {
     };
 
     while let Some((line_number, line)) = lines.next() {
-        if let Some(stripped_line) = line.strip_prefix(";;") {
+        if line.starts_with(";;;") {
+            // This is a comment, so we skip it
+            continue;
+        } else if let Some(stripped_line) = line.strip_prefix(";;") {
             // Begin a new section
             if !current_section.cases.is_empty() {
                 sections.push(current_section);
@@ -201,7 +210,7 @@ fn main() {
                     };
                     // Build the case, push it to the current section, and break from the loop
                     current_section.cases.push(Case {
-                        input: input.join("\n"),
+                        input,
                         expected_output,
                         line_number: case_line_number,
                         deferrable,
@@ -217,6 +226,9 @@ fn main() {
         }
     }
 
+    let env = make_a_lisp_rs::Env::new(None);
+    make_a_lisp_rs::load_builtins(env.borrow_mut().deref_mut());
+
     let section_outputs = sections
         .into_iter()
         .map(|section| SectionOutput {
@@ -225,11 +237,14 @@ fn main() {
                 .cases
                 .into_iter()
                 .map(|case| {
-                    case.run(CaseRunConfig {
-                        skip_deferrable: false,
-                        skip_soft: false,
-                        skip_optional: false,
-                    })
+                    case.run(
+                        CaseRunConfig {
+                            skip_deferrable: false,
+                            skip_soft: false,
+                            skip_optional: false,
+                        },
+                        env.clone(),
+                    )
                 })
                 .collect::<Vec<_>>(),
         })
@@ -241,7 +256,6 @@ fn main() {
     let mut soft_fails = 0;
     let mut required_fails = 0;
     let mut skipped_cases = 0;
-    let mut num_panics = 0;
     for section_output in section_outputs {
         let num_cases = section_output.cases.len();
         let failing_cases = section_output
@@ -267,9 +281,6 @@ fn main() {
         if num_failing_cases > 0 {
             println!("Section {}", section_output.title);
             for (i, case) in failing_cases {
-                if case.panic {
-                    num_panics += 1;
-                }
                 let mut soft_flags = vec![];
                 if case.soft {
                     soft_flags.push("soft");
@@ -291,9 +302,9 @@ fn main() {
                     case.line_number,
                     soft_flags
                 );
-                println!("Input> {}", case.input);
+                println!("Input> {}", case.input.join("\n"));
                 println!("Expected output {}", case.expected_output);
-                println!("Actual output ;=>{}", case.actual_output);
+                println!("Actual output ;=> {}", case.actual_output);
             }
             println!();
         }
@@ -304,13 +315,12 @@ fn main() {
         skipped_cases += num_skipped_cases;
     }
     println!(
-        "Summary: {} cases, {} passed, {} skipped, {} soft fails, {} hard fails, {} total fails, {} panics",
+        "Summary: {} cases, {} passed, {} skipped, {} soft fails, {} hard fails, {} total fails",
         num_cases_seen,
         passing_cases,
         skipped_cases,
         soft_fails,
         required_fails,
         required_fails + soft_fails,
-        num_panics
     );
 }

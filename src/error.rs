@@ -20,7 +20,7 @@ pub enum MalError {
     InvalidHashMapKey,
     #[error("unexpected {found}")]
     Unexpected { found: String },
-    #[error("symbol not found: {0:?}")]
+    #[error("symbol '{0}' not found")]
     SymbolNotFound(String),
     #[error("type error: {0:?}")]
     TypeError(MalData),
