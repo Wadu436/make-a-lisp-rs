@@ -5,8 +5,8 @@ mod types;
 
 pub fn read(input: String) -> MalData {
     let mut reader = reader::Reader::new(input);
-    let ast = reader.read_form();
-    ast
+    
+    reader.read_form()
 }
 
 pub fn eval(input: MalData) -> MalData {

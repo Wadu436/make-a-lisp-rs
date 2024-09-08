@@ -57,10 +57,9 @@ impl Case {
         let (passed, actual_output) = match result {
             Ok(result) => match self.expected_output.clone() {
                 ExpectedOutput::Literal(expected_output) => (result == expected_output, result),
-                ExpectedOutput::Regex(expected_output) => (
-                    expected_output.is_match(&result.as_bytes()).unwrap(),
-                    result,
-                ),
+                ExpectedOutput::Regex(expected_output) => {
+                    (expected_output.is_match(result.as_bytes()).unwrap(), result)
+                }
             },
             Err(_) => {
                 panic = true;
@@ -132,18 +131,18 @@ fn main() {
     };
 
     while let Some((line_number, line)) = lines.next() {
-        if line.starts_with(";;") {
+        if let Some(stripped_line) = line.strip_prefix(";;") {
             // Begin a new section
             if !current_section.cases.is_empty() {
                 sections.push(current_section);
             }
             current_section = Section {
-                title: line[2..].trim().to_owned(),
+                title: stripped_line.trim().to_owned(),
                 cases: vec![],
             };
-        } else if line.starts_with(";>>>") {
+        } else if let Some(stripped_line) = line.strip_prefix(";>>>") {
             // Define a meta command
-            match line[4..]
+            match stripped_line
                 .trim()
                 .split_once('=')
                 .expect("Invalid meta command")
@@ -182,15 +181,15 @@ fn main() {
             let mut input = vec![line];
             let case_line_number = line_number;
             // Consume all lines until we hit an expected output line
-            while let Some((line_number, line)) = lines.next() {
+            for (line_number, line) in lines.by_ref() {
                 if line.starts_with(";") {
                     // This is an expected output line
-                    let expected_output = if line.starts_with(";=>") {
+                    let expected_output = if let Some(stripped_line) = line.strip_prefix(";=>") {
                         // This is a literal expected output
-                        ExpectedOutput::Literal(line[3..].to_owned())
-                    } else if line.starts_with(";/") {
+                        ExpectedOutput::Literal(stripped_line.to_owned())
+                    } else if let Some(stripped_line) = line.strip_prefix(";/") {
                         // This is a regex expected output
-                        ExpectedOutput::Regex(pcre2::bytes::Regex::new(&line[2..]).unwrap())
+                        ExpectedOutput::Regex(pcre2::bytes::Regex::new(stripped_line).unwrap())
                     } else {
                         panic!(
                             "Invalid expected output line on line {}: {}",
@@ -253,10 +252,7 @@ fn main() {
         let num_skipped_cases = section_output
             .cases
             .iter()
-            .filter(|case| match case {
-                CaseOutput::Skip => true,
-                _ => false,
-            })
+            .filter(|case| matches!(case, CaseOutput::Skip))
             .count();
         let num_failing_cases = failing_cases.clone().count();
         let num_soft_failing_cases = failing_cases
