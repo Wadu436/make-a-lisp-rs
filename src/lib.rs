@@ -1,12 +1,13 @@
+use error::MalError;
 use types::MalData;
 
+mod error;
 mod reader;
 mod types;
 
-pub fn read(input: String) -> MalData {
+pub fn read(input: String) -> Result<MalData, MalError> {
     let mut reader = reader::Reader::new(input);
-    
-    reader.read_form()
+    reader.read_input()
 }
 
 pub fn eval(input: MalData) -> MalData {
@@ -18,5 +19,9 @@ pub fn print(input: MalData) -> String {
 }
 
 pub fn rep(input: String) -> String {
-    print(eval(read(input)))
+    let ast = read(input);
+    match ast {
+        Ok(ast) => print(eval(ast)),
+        Err(e) => format!("{}", e),
+    }
 }
