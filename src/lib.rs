@@ -11,6 +11,12 @@ pub struct Interpreter {
     env: MalEnvironment,
 }
 
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Interpreter {
     pub fn new() -> Self {
         let mut interpreter = Self {
@@ -107,7 +113,7 @@ impl Interpreter {
                     .iter()
                     .map(|el| self.eval(el.clone()))
                     .collect::<Result<Vec<_>, _>>()?;
-                if evaluated_list.len() > 0 {
+                if !evaluated_list.is_empty() {
                     if let MalData::Symbol(s) = &evaluated_list[0] {
                         let native_function = self.env.get(s).unwrap();
                         Ok(native_function(&evaluated_list[1..])?)
