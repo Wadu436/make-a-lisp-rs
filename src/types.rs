@@ -6,8 +6,10 @@ use std::{
 
 use crate::error::MalError;
 
+type MalFunction = dyn Fn(&[MalData]) -> Result<MalData, MalError>;
+
 #[derive(Clone)]
-pub struct MalNativeFunction(pub Rc<Box<dyn Fn(&[MalData]) -> Result<MalData, MalError>>>);
+pub struct MalNativeFunction(pub Rc<Box<MalFunction>>);
 
 impl Debug for MalNativeFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

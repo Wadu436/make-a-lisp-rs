@@ -53,7 +53,7 @@ impl Case {
             return CaseOutput::Skip;
         }
 
-        let result: Result<String, MalError> = (|| {
+        let result: Result<String, MalError> = {
             let mut output = String::new();
             for line in self.input.iter() {
                 output = match rep(line.clone(), env.clone()) {
@@ -64,7 +64,7 @@ impl Case {
                 };
             }
             Ok(output)
-        })();
+        };
 
         let actual_output = match result {
             Ok(output) => output,

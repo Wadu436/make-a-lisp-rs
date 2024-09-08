@@ -1,5 +1,5 @@
 use std::{
-    cell::{Ref, RefCell},
+    cell::RefCell,
     collections::hash_map,
     rc::Rc,
 };
@@ -131,7 +131,7 @@ pub fn eval(input: MalData, env: Rc<RefCell<Env>>) -> Result<MalData, MalError> 
                             // Evaluate the bindings list
                             if let MalData::List(bindings) | MalData::Vector(bindings) = &list[1] {
                                 let pairs = bindings.chunks_exact(2);
-                                if pairs.remainder().len() != 0 {
+                                if !pairs.remainder().is_empty() {
                                     return Err(MalError::TypeError(list[1].clone()));
                                 }
                                 let new_env = Env::new(Some(env.clone()));
@@ -202,6 +202,5 @@ pub fn print(input: MalData) -> String {
 
 pub fn rep(input: String, env: Rc<RefCell<Env>>) -> Result<String, MalError> {
     read(input)
-        .and_then(|ast| eval(ast, env))
-        .and_then(|evaluated| Ok(print(evaluated)))
+        .and_then(|ast| eval(ast, env)).map(print)
 }
