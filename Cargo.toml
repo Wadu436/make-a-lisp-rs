@@ -7,9 +7,15 @@ edition = "2021"
 name = "cli"
 src = "src/bin/cli.rs"
 
+[[bin]]
+name = "test"
+src = "src/bin/test.rs"
+
 [lib]
 
 [dependencies]
 color-eyre = "0.6.3"
+pcre2 = "0.2.9"
+regex = "1.10.6"
 rustyline = "14.0.0"
 thiserror = "1.0.63"
