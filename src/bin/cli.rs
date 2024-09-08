@@ -1,7 +1,6 @@
 use color_eyre::Result;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::io::{self, Write};
 
 fn main() -> Result<()> {
     color_eyre::install()?;

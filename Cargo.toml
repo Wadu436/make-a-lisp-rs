@@ -5,11 +5,11 @@ edition = "2021"
 
 [[bin]]
 name = "cli"
-src = "src/bin/cli.rs"
+path = "src/bin/cli.rs"
 
 [[bin]]
 name = "test"
-src = "src/bin/test.rs"
+path = "src/bin/test.rs"
 
 [lib]
 

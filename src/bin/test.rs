@@ -1,7 +1,5 @@
 use std::{env, fmt::Display, panic};
 
-use color_eyre::owo_colors::OwoColorize;
-
 #[derive(Debug)]
 struct Section {
     title: String,
@@ -35,8 +33,24 @@ struct Case {
     optional: bool,
 }
 
+struct CaseRunConfig {
+    skip_deferrable: bool,
+    skip_soft: bool,
+    skip_optional: bool,
+}
+
 impl Case {
-    fn run(&self) -> CaseOutput {
+    fn run(&self, config: CaseRunConfig) -> CaseOutput {
+        if config.skip_deferrable && self.deferrable {
+            return CaseOutput::Skip;
+        }
+        if config.skip_soft && self.soft {
+            return CaseOutput::Skip;
+        }
+        if config.skip_optional && self.optional {
+            return CaseOutput::Skip;
+        }
+
         let mut panic = false;
         let result = panic::catch_unwind(|| make_a_lisp_rs::rep(self.input.clone()));
 
@@ -208,7 +222,13 @@ fn main() {
             cases: section
                 .cases
                 .into_iter()
-                .map(|case| case.run())
+                .map(|case| {
+                    case.run(CaseRunConfig {
+                        skip_deferrable: false,
+                        skip_soft: false,
+                        skip_optional: false,
+                    })
+                })
                 .collect::<Vec<_>>(),
         })
         .collect::<Vec<_>>();
@@ -219,6 +239,7 @@ fn main() {
     let mut soft_fails = 0;
     let mut required_fails = 0;
     let mut skipped_cases = 0;
+    let mut num_panics = 0;
     for section_output in section_outputs {
         let num_cases = section_output.cases.len();
         let failing_cases = section_output
@@ -247,6 +268,9 @@ fn main() {
         if num_failing_cases > 0 {
             println!("Section {}", section_output.title);
             for (i, case) in failing_cases {
+                if case.panic {
+                    num_panics += 1;
+                }
                 println!(
                     "Case {} (line {}):",
                     num_cases_seen + i + 1,
@@ -265,12 +289,13 @@ fn main() {
         skipped_cases += num_skipped_cases;
     }
     println!(
-        "Summary: {} cases, {} passed, {} skipped, {} soft fails, {} hard fails, {} total fails",
+        "Summary: {} cases, {} passed, {} skipped, {} soft fails, {} hard fails, {} total fails, {} panics",
         num_cases_seen,
         passing_cases,
         skipped_cases,
         soft_fails,
         required_fails,
-        required_fails + soft_fails
+        required_fails + soft_fails,
+        num_panics
     );
 }
