@@ -31,7 +31,7 @@ impl Reader {
 
     pub fn read_input(&mut self) -> Result<MalData, MalError> {
         eprintln!("i: {}, tokens.len: {}", self.i, self.tokens.len());
-        if self.tokens.len() == 0 {
+        if self.tokens.is_empty() {
             return Ok(MalData::Nil);
         }
         let data = self.read_form()?;
@@ -122,19 +122,19 @@ impl Reader {
 
     fn read_list(&mut self) -> Result<MalData, MalError> {
         self.read_sequence(")")
-            .map(|sequence| MalData::List(sequence))
+            .map(MalData::List)
     }
 
     fn read_vector(&mut self) -> Result<MalData, MalError> {
         self.read_sequence("]")
-            .map(|sequence| MalData::Vector(sequence))
+            .map(MalData::Vector)
     }
 
     fn read_hash_map(&mut self) -> Result<MalData, MalError> {
         let sequence = self.read_sequence("}")?;
 
         let kv_pairs = sequence.chunks_exact(2);
-        if kv_pairs.remainder().len() != 0 {
+        if !kv_pairs.remainder().is_empty() {
             return Err(MalError::UnbalancedHashMap);
         }
 
@@ -145,7 +145,7 @@ impl Reader {
             hash_map.insert(key, kv_pair[1].clone());
         }
 
-        return Ok(MalData::HashMap(hash_map));
+        Ok(MalData::HashMap(hash_map))
     }
 
     fn read_sequence(&mut self, ending_token: &str) -> Result<Vec<MalData>, MalError> {
