@@ -267,10 +267,26 @@ fn main() {
                 if case.panic {
                     num_panics += 1;
                 }
+                let mut soft_flags = vec![];
+                if case.soft {
+                    soft_flags.push("soft");
+                }
+                if case.deferrable {
+                    soft_flags.push("deferrable");
+                }
+                if case.optional {
+                    soft_flags.push("optional");
+                }
+                let soft_flags = if soft_flags.is_empty() {
+                    "".to_owned()
+                } else {
+                    format!(" ({})", soft_flags.join(", "))
+                };
                 println!(
-                    "Case {} (line {}):",
+                    "Case {} (line {}){}:",
                     num_cases_seen + i + 1,
-                    case.line_number
+                    case.line_number,
+                    soft_flags
                 );
                 println!("Input> {}", case.input);
                 println!("Expected output {}", case.expected_output);
