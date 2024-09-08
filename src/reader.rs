@@ -13,7 +13,6 @@ pub struct Reader {
 impl Reader {
     pub fn new(input: String) -> Self {
         let tokens = Self::tokenize(input);
-        eprintln!("{:?}", tokens);
         Self { tokens, i: 0 }
     }
 
@@ -30,7 +29,6 @@ impl Reader {
     }
 
     pub fn read_input(&mut self) -> Result<MalData, MalError> {
-        eprintln!("i: {}, tokens.len: {}", self.i, self.tokens.len());
         if self.tokens.is_empty() {
             return Ok(MalData::Nil);
         }

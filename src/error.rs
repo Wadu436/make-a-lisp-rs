@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::types::MalData;
+
 #[derive(Debug, Error)]
 pub enum MalError {
     #[error("unbalanced brackets")]
@@ -18,4 +20,8 @@ pub enum MalError {
     InvalidHashMapKey,
     #[error("unexpected {found}")]
     Unexpected { found: String },
+    #[error("symbol not found: {0:?}")]
+    SymbolNotFound(String),
+    #[error("type error: {0:?}")]
+    TypeError(MalData),
 }

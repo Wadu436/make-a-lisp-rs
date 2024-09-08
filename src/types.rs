@@ -1,4 +1,7 @@
-use std::{collections::hash_map, fmt::Display};
+use std::{
+    collections::{hash_map, HashMap},
+    fmt::Display,
+};
 
 use crate::error::MalError;
 
@@ -100,3 +103,6 @@ impl Display for MalData {
         }
     }
 }
+
+pub type MalNativeFunction = Box<dyn Fn(&[MalData]) -> Result<MalData, MalError>>;
+pub type MalEnvironment = HashMap<String, MalNativeFunction>;

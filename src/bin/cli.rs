@@ -5,6 +5,7 @@ use rustyline::DefaultEditor;
 fn main() -> Result<()> {
     color_eyre::install()?;
     let mut rl = DefaultEditor::new()?;
+    let interpreter = make_a_lisp_rs::Interpreter::new();
 
     loop {
         // Read the input
@@ -15,7 +16,7 @@ fn main() -> Result<()> {
                 rl.add_history_entry(line.as_str())?;
 
                 // Process the line
-                let output = make_a_lisp_rs::rep(line);
+                let output = interpreter.rep(line);
 
                 // Print the output
                 println!("{}", output);

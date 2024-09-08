@@ -52,7 +52,10 @@ impl Case {
         }
 
         let mut panic = false;
-        let result = panic::catch_unwind(|| make_a_lisp_rs::rep(self.input.clone()));
+        let result = panic::catch_unwind(|| {
+            let interpreter = make_a_lisp_rs::Interpreter::new();
+            interpreter.rep(self.input.clone())
+        });
 
         let (passed, actual_output) = match result {
             Ok(result) => match self.expected_output.clone() {
